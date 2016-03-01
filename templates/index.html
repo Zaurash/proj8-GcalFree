@@ -127,6 +127,7 @@
 
 {% if session.calendars is defined  %}
   <div class="col-lg-5">
+  <h4>Calendars</h4>
   {% for cal in session.calendars if cal.selected %}
           <div class="row-md-4">
 	   {{ cal.summary }}

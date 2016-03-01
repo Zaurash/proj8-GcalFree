@@ -75,37 +75,27 @@ def choose():
 
     for cal in list_calendars(gcal_service):
         events = gcal_service.events().list(calendarId=cal["id"]).execute()
-        print("Events in calendar: ")
         for event in events['items']:
-            # print(event["summary"])
             if ("transparency" in event) and event["transparency"] == "transparent":
                 continue
             if "dateTime" in event["start"]:
-                # print("  --->   Checking event: " + event["summary"])
                 eventStart = arrow.get(event["start"]["dateTime"])
                 eventEnd = arrow.get(event["end"]["dateTime"])
                 if containsRange(eventStart.time(), arrow.get(flask.session["begin_time"], "h:mm A").time(), eventEnd.time(), arrow.get(flask.session["end_time"], "h:mm A").time()):
                     busyEvents.append(event)
-                    # print("  --->     --->   In time range: " + event["summary"])
                     
 
-        for event in busyEvents:
-            for otherEvent in busyEvents:
-                # Skip this iteration if event and otherEvent are the same event
-                if event == otherEvent:
-                    continue
-                # If event and otherEvent overlap, replace event with
-                # the union of other event and event and remove
-                # event and other event from busyEvents
-                if eventsOverlap(event, otherEvent):
-                    busyEvents.append(eventsUnify(event, otherEvent))
-                    busyEvents.remove(event)
-                    busyEvents.remove(otherEvent)
-        for event in busyEvents:
-            eventStart = arrow.get(event["start"]["dateTime"])
-            eventEnd = arrow.get(event["end"]["dateTime"])
-            print("Busy from: " + str(eventStart))
-            print("     until: " + str(eventEnd))
+    busyEvents = consolidateEvents(busyEvents)
+    events = []
+    for event in busyEvents:
+        if event != None:
+            events.append(event)
+                
+    for event in busyEvents:
+        eventStart = arrow.get(event["start"]["dateTime"])
+        eventEnd = arrow.get(event["end"]["dateTime"])
+        print("Busy from: " + str(eventStart.time))
+        print("     until: " + str(eventEnd).time)
                     
     return render_template('index.html')
 
@@ -137,6 +127,33 @@ def choose():
 #  as a 'continuation' or 'return address' to use instead. 
 #
 ####
+
+def consolidateEvents(events):
+    """
+    Takes a list of events and returns a new list
+    of events where any overlapping events have been joined
+    and old events are set to none
+    """
+    app.logger.debug("enter consolidate")
+    
+    for i in range(len(events)):
+        for j in range(len(events)):
+            if events[i] == None or events[j] == None:
+                continue
+            # Skip this iteration if event and otherEvent are the same event
+            if events[i] == events[j]:
+                continue
+            # If event and otherEvent overlap, replace event with
+            # the union of other event and event and remove
+            # otherEvent from events
+            print("CHECKING EVENTS: " + events[i]["summary"] + " AND " + events[j]["summary"])
+            if eventsOverlap(events[i], events[j]):
+                union = eventsUnion(events[i], events[j])
+                events.append(union)
+                events[i] = None
+                events[j] = None
+                events = consolidateEvents(events)
+    return events
 
 def eventsUnify(event1, event2):
     """
@@ -176,6 +193,10 @@ def eventsOverlap(event1, event2):
     if event1Start <= event2Start and event1End >= event2Start:
         return True
     elif event2Start <= event1Start and event2End >= event1Start:
+        return True
+    elif event1Start <= event2Start and event1End >= event2End:
+        return True
+    elif event2Start <= event1Start and event2End >= event1End:
         return True
     return False
 
