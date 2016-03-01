@@ -70,6 +70,8 @@ def choose():
 
     gcal_service = get_gcal_service(credentials)
     app.logger.debug("Returned from get_gcal_service")
+    
+    busyEvents = []
 
     for cal in list_calendars(gcal_service):
         events = gcal_service.events().list(calendarId=cal["id"]).execute()
@@ -82,8 +84,29 @@ def choose():
                 # print("  --->   Checking event: " + event["summary"])
                 eventStart = arrow.get(event["start"]["dateTime"])
                 eventEnd = arrow.get(event["end"]["dateTime"])
-                if eventStart.time() >= arrow.get(flask.session["begin_time"], "h:mm A").time() and eventEnd.time() <= arrow.get(flask.session["end_time"], "h:mm A").time():
-                    print("  --->     --->   In time range: " + event["summary"])
+                if containsRange(eventStart.time(), arrow.get(flask.session["begin_time"], "h:mm A").time(), eventEnd.time(), arrow.get(flask.session["end_time"], "h:mm A").time()):
+                    busyEvents.append(event)
+                    # print("  --->     --->   In time range: " + event["summary"])
+                    
+
+        for event in busyEvents:
+            for otherEvent in busyEvents:
+                # Skip this iteration if event and otherEvent are the same event
+                if event == otherEvent:
+                    continue
+                # If event and otherEvent overlap, replace event with
+                # the union of other event and event and remove
+                # event and other event from busyEvents
+                if eventsOverlap(event, otherEvent):
+                    busyEvents.append(eventsUnify(event, otherEvent))
+                    busyEvents.remove(event)
+                    busyEvents.remove(otherEvent)
+        for event in busyEvents:
+            eventStart = arrow.get(event["start"]["dateTime"])
+            eventEnd = arrow.get(event["end"]["dateTime"])
+            print("Busy from: " + str(eventStart))
+            print("     until: " + str(eventEnd))
+                    
     return render_template('index.html')
 
 ####
@@ -114,6 +137,61 @@ def choose():
 #  as a 'continuation' or 'return address' to use instead. 
 #
 ####
+
+def eventsUnify(event1, event2):
+    """
+    Returns an event made from the union of two events
+    """
+    if not eventsOverlap(event1, event2):
+        raise ValueError('Events do not overlap!')
+    returnEvent= {"summary": "Union of " + event1["summary"] + " and " + event2["summary"],
+                  "start": {"dateTime": None},
+                  "end": {"dateTime": None}}
+    event1Start = arrow.get(event1["start"]["dateTime"])
+    event1End = arrow.get(event1["end"]["dateTime"])
+    event2Start = arrow.get(event2["start"]["dateTime"])
+    event2End = arrow.get(event2["end"]["dateTime"])
+    if event1Start <= event2Start and event1End <= event2End:
+        returnEvent["start"]["dateTime"] = event1Start
+        returnEvent["end"]["dateTime"] = event2End
+    elif event1Start <= event2Start and event1End >= event2End:
+        returnEvent["start"]["dateTime"] = event1Start
+        returnEvent["end"]["dateTime"] = event1End
+    elif event1Start >= event2Start and event1End <= event2End:
+        returnEvent["start"]["dateTime"] = event2Start
+        returnEvent["end"]["dateTime"] = event2End
+    elif event1Start >= event2Start and event1End >= event2End:
+        returnEvent["start"]["dateTime"] = event2Start
+        returnEvent["end"]["dateTime"] = event1End
+    return returnEvent
+
+def eventsOverlap(event1, event2):
+    """
+    Returns true if two events overlap, false otherwise
+    """
+    event1Start = arrow.get(event1["start"]["dateTime"])
+    event1End = arrow.get(event1["end"]["dateTime"])
+    event2Start = arrow.get(event2["start"]["dateTime"])
+    event2End = arrow.get(event2["end"]["dateTime"])
+    if event1Start <= event2Start and event1End >= event2Start:
+        return True
+    elif event2Start <= event1Start and event2End >= event1Start:
+        return True
+    return False
+
+def containsRange(event1Start, event2Start, event1End, event2End):
+    """
+    Returns true if one event starts and ends
+    inside of the other event
+    """
+    if event2Start <= event1Start and event2End >= event1End:
+        return True
+    elif event1Start <= event2Start and event1End >= event2End:
+        return True
+    else:
+        return False
+
+
 
 def valid_credentials():
     """
@@ -248,8 +326,8 @@ def init_session_values():
         tomorrow.format("MM/DD/YYYY"),
         nextweek.format("MM/DD/YYYY"))
     # Default time span each day, 8 to 5
-    flask.session["begin_time"] = interpret_time("9am")
-    flask.session["end_time"] = interpret_time("5pm")
+    flask.session["begin_time"] = "9:00 AM"
+    flask.session["end_time"] = "5:00 PM"
 
 def interpret_time( text ):
     """

@@ -124,21 +124,26 @@
 
 <br /><input type="submit" id="button" value="Find Times" />
 </div>
-</form>
 
 {% if session.calendars is defined  %}
   <div class="col-lg-5">
   {% for cal in session.calendars if cal.selected %}
           <div class="row-md-4">
 	   {{ cal.summary }}
-	     <input id="{{cal.id}}" name="{{cal.summary}}" type="checkbox" value="{{cal}}" checked>
+	     <input name="{{cal.summary}}" type="checkbox" value="{{cal}}" checked>
           </div>
          <!-- {% if loop.index is divisibleby 3 %}
           </div> <div class="row">
          {% endif %} -->
   {% endfor %}
 </div>
+  <script type="text/javascript">
+  $("input:checkbox[name=type]:checked").each(function(){
+    yourArray.push($(this).val());
+  });
+  </script>
 {% endif %} 
+</form>
 
 
     </div>  <!-- container (for bootstrap) -->
